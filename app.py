@@ -1,6 +1,7 @@
 ﻿"""
 MoodSyncAI - Streamlit UI
 Multimodal sentiment & emotion analyser with CNN + Transformer + Fusion + GenAI.
+Extended: webcam input support.
 """
 
 import streamlit as st
@@ -52,13 +53,32 @@ col_input_l, col_input_r = st.columns(2)
 
 with col_input_l:
     st.subheader("📷 Visual Input")
-    uploaded_image = st.file_uploader(
-        "Upload a face image",
-        type=["jpg", "jpeg", "png"],
-        help="Upload a clear photo of a person's face"
+
+    # Toggle between upload and webcam
+    input_mode = st.radio(
+        "Input mode",
+        ["Upload image", "Take photo (webcam)"],
+        horizontal=True,
+        help="Use your webcam or upload an existing image"
     )
-    if uploaded_image is not None:
-        st.image(uploaded_image, caption="Uploaded image", use_container_width=True)
+
+    uploaded_image = None
+
+    if input_mode == "Upload image":
+        uploaded_image = st.file_uploader(
+            "Upload a face image",
+            type=["jpg", "jpeg", "png"],
+            help="Upload a clear photo of a person's face"
+        )
+        if uploaded_image is not None:
+            st.image(uploaded_image, caption="Uploaded image", use_container_width=True)
+    else:
+        uploaded_image = st.camera_input(
+            "Click 'Take Photo' below to capture from webcam",
+            help="Allow camera access when your browser asks"
+        )
+        if uploaded_image is not None:
+            st.success("✅ Photo captured")
 
 with col_input_r:
     st.subheader("💬 Verbal Input")
@@ -88,7 +108,7 @@ with btn_col:
 # ============================================================
 if analyze_clicked:
     if uploaded_image is None:
-        st.error("⚠️ Please upload an image first.")
+        st.error("⚠️ Please upload an image or take a photo first.")
         st.stop()
     if not user_text.strip():
         st.error("⚠️ Please type a sentence first.")
