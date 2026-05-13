@@ -1,7 +1,7 @@
 ﻿"""
 MoodSyncAI - Streamlit UI
 Multimodal sentiment & emotion analyser with CNN + Transformer + Fusion + GenAI.
-Extended: webcam input support.
+Extended: webcam input + ViT attention rollout heatmap.
 """
 
 import streamlit as st
@@ -14,6 +14,7 @@ from cnn_emotion import detect_emotion
 from text_sentiment import analyze_sentiment
 from fusion import fuse, EMOTION_TO_SENTIMENT
 from summary import generate_summary
+from attention_rollout import compute_attention_rollout
 
 
 # ============================================================
@@ -27,13 +28,12 @@ st.set_page_config(
 
 
 # ============================================================
-# Cached model loading - prevents reload on every interaction
+# Cached model loading
 # ============================================================
 @st.cache_resource(show_spinner="Loading AI models... (~1 minute first time)")
 def warmup_models():
-    """Pre-load all three models into memory once."""
-    detect_emotion("test_face.jpg")  # warms CNN
-    analyze_sentiment("warmup")       # warms RoBERTa
+    detect_emotion("test_face.jpg")
+    analyze_sentiment("warmup")
     return True
 
 
@@ -42,24 +42,22 @@ def warmup_models():
 # ============================================================
 st.title("🧠 MoodSyncAI")
 st.markdown("**Multimodal Sentiment & Emotion Analyser**")
-st.caption("CNN (ViT) for facial emotion · Transformer (RoBERTa) for text sentiment · Fusion layer · Generative explanation")
+st.caption("CNN (ViT) for facial emotion · Transformer (RoBERTa) for text sentiment · Fusion layer · Generative explanation · Attention rollout")
 st.divider()
 
 
 # ============================================================
-# Input section - 2 columns
+# Input section
 # ============================================================
 col_input_l, col_input_r = st.columns(2)
 
 with col_input_l:
     st.subheader("📷 Visual Input")
 
-    # Toggle between upload and webcam
     input_mode = st.radio(
         "Input mode",
         ["Upload image", "Take photo (webcam)"],
         horizontal=True,
-        help="Use your webcam or upload an existing image"
     )
 
     uploaded_image = None
@@ -68,14 +66,12 @@ with col_input_l:
         uploaded_image = st.file_uploader(
             "Upload a face image",
             type=["jpg", "jpeg", "png"],
-            help="Upload a clear photo of a person's face"
         )
         if uploaded_image is not None:
             st.image(uploaded_image, caption="Uploaded image", use_container_width=True)
     else:
         uploaded_image = st.camera_input(
             "Click 'Take Photo' below to capture from webcam",
-            help="Allow camera access when your browser asks"
         )
         if uploaded_image is not None:
             st.success("✅ Photo captured")
@@ -86,13 +82,12 @@ with col_input_r:
         "Type what the person said",
         value="No, I think the project is going really well.",
         height=120,
-        help="Type the sentence the person spoke"
     )
 
 st.divider()
 
 # ============================================================
-# Analyze button - centered
+# Analyze button
 # ============================================================
 _, btn_col, _ = st.columns([1, 2, 1])
 with btn_col:
@@ -104,7 +99,7 @@ with btn_col:
 
 
 # ============================================================
-# Run analysis when button clicked
+# Run analysis
 # ============================================================
 if analyze_clicked:
     if uploaded_image is None:
@@ -114,7 +109,6 @@ if analyze_clicked:
         st.error("⚠️ Please type a sentence first.")
         st.stop()
 
-    # Save uploaded image to a temp file so fuse() can read it from path
     with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
         tmp.write(uploaded_image.getbuffer())
         tmp_path = tmp.name
@@ -127,9 +121,6 @@ if analyze_clicked:
         st.divider()
         st.header("📊 Results")
 
-        # ----------------------------------------------------
-        # Two charts side-by-side
-        # ----------------------------------------------------
         col_chart_l, col_chart_r = st.columns(2)
 
         with col_chart_l:
@@ -161,6 +152,33 @@ if analyze_clicked:
         st.divider()
 
         # ----------------------------------------------------
+        # ATTENTION ROLLOUT VISUALIZATION (extended feature)
+        # ----------------------------------------------------
+        st.subheader("🔥 ViT Attention Rollout")
+        st.caption(
+            "Heatmap showing which facial regions the Vision Transformer "
+            "focused on for its emotion prediction. Warm colors (red/yellow) = "
+            "high attention; cool colors (blue/green) = low attention."
+        )
+
+        col_orig, col_heat = st.columns(2)
+
+        with col_orig:
+            st.markdown("**Original Image**")
+            st.image(tmp_path, use_container_width=True)
+
+        with col_heat:
+            st.markdown("**Attention Heatmap**")
+            with st.spinner("Computing attention rollout..."):
+                try:
+                    overlay, _, _ = compute_attention_rollout(tmp_path)
+                    st.image(overlay, use_container_width=True)
+                except Exception as e:
+                    st.warning(f"Could not compute attention heatmap: {e}")
+
+        st.divider()
+
+        # ----------------------------------------------------
         # Fusion status badge
         # ----------------------------------------------------
         st.subheader("🔗 Fusion Analysis")
@@ -174,7 +192,7 @@ if analyze_clicked:
         elif status == "PARTIAL MISMATCH":
             st.warning(f"⚠️ **PARTIAL MISMATCH** — Agreement score: {agreement:.1f}%")
             st.caption("One modality is neutral while the other is emotionally charged.")
-        else:  # MISMATCH DETECTED
+        else:
             st.error(f"🚨 **MISMATCH DETECTED** — Agreement score: {agreement:.1f}%")
             st.caption("Strong incongruence between facial cues and verbal content.")
 
@@ -189,7 +207,6 @@ if analyze_clicked:
         st.info(summary_text)
 
     finally:
-        # Clean up temp file
         if os.path.exists(tmp_path):
             os.unlink(tmp_path)
 
