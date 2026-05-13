@@ -174,3 +174,49 @@ Each core requirement of the assignment maps to specific lectures from the Data 
 - **Google Research** for the **flan-t5-base** model.
 - **Prof. Dr. Gayan de Silva** for course direction and the assignment brief.
 
+
+---
+
+## Extended Features Implemented
+
+The following extended features (from section 4 of the assignment brief) are implemented:
+
+### 1. Webcam input
+
+Streamlit's `st.camera_input` widget allows the user to capture a still frame directly from their webcam instead of uploading a file. Implemented as a radio toggle in the visual input panel — both modes coexist without breaking the existing upload flow.
+
+File: `app.py` (input mode toggle around line 80).
+
+### 2. Audio input + Whisper transcription
+
+Streamlit's `st.audio_input` records audio in the browser; OpenAI's Whisper "tiny" model transcribes the captured speech to text; the transcribed text auto-fills the text box that feeds the existing RoBERTa sentiment pipeline.
+
+The user can also still type text manually if they prefer. The tiny variant of Whisper was chosen over `base` / `small` / `medium` / `large` to keep the model footprint small (~39 MB) and transcription latency low (~5 seconds for short clips) at the cost of some accuracy — acceptable for demo purposes.
+
+File: `audio_transcribe.py`
+
+### 3. ViT attention rollout heatmap
+
+A visualisation of which facial regions the Vision Transformer attended to when predicting the emotion. Implements the **attention rollout** technique from Abnar & Zuidema (ACL 2020):
+
+1. Forward pass with `output_attentions=True`
+2. Average attention across heads, layer by layer
+3. Add identity matrix to model the residual connections
+4. Row-normalise so each row sums to 1
+5. Iteratively multiply across all 12 transformer layers
+6. Extract the CLS token's attention to the 196 image patches
+7. Reshape to a 14×14 grid, upscale to the original image dimensions
+8. Apply a JET colormap and blend with the original image
+
+Note: Grad-CAM (the technique listed in the assignment brief) is designed for convolutional networks. Because the model used here is a Vision Transformer rather than a CNN, attention rollout is the correct interpretability technique for this architecture.
+
+File: `attention_rollout.py`
+
+---
+
+## What was *not* implemented (and why)
+
+- **Real-time video timeline** — out of scope for the available time; the existing webcam capture is a still frame rather than a continuous video stream.
+- **Learned fusion network** — would require paired image-text data with ground-truth incongruence labels, which is not publicly available. The current rule-based fusion was the pragmatic alternative.
+- **Hugging Face Spaces / Streamlit Cloud deployment** — the app runs locally because hosting all three models (CNN, RoBERTa, Whisper, flan-t5-base, totalling ~3 GB) requires a paid tier on most free-deployment services.
+
