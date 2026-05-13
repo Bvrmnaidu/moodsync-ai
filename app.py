@@ -1,7 +1,7 @@
 ﻿"""
 MoodSyncAI - Streamlit UI
 Multimodal sentiment & emotion analyser with CNN + Transformer + Fusion + GenAI.
-Extended: webcam input + ViT attention rollout heatmap.
+Extended: webcam input, ViT attention rollout, audio transcription via Whisper.
 """
 
 import streamlit as st
@@ -15,6 +15,7 @@ from text_sentiment import analyze_sentiment
 from fusion import fuse, EMOTION_TO_SENTIMENT
 from summary import generate_summary
 from attention_rollout import compute_attention_rollout
+from audio_transcribe import transcribe_audio
 
 
 # ============================================================
@@ -38,11 +39,18 @@ def warmup_models():
 
 
 # ============================================================
+# Session state for transcribed text
+# ============================================================
+if "transcribed_text" not in st.session_state:
+    st.session_state.transcribed_text = "No, I think the project is going really well."
+
+
+# ============================================================
 # Header
 # ============================================================
 st.title("🧠 MoodSyncAI")
 st.markdown("**Multimodal Sentiment & Emotion Analyser**")
-st.caption("CNN (ViT) for facial emotion · Transformer (RoBERTa) for text sentiment · Fusion layer · Generative explanation · Attention rollout")
+st.caption("CNN (ViT) for facial emotion · Transformer (RoBERTa) for text sentiment · Whisper for audio · Fusion layer · Generative explanation · Attention rollout")
 st.divider()
 
 
@@ -55,7 +63,7 @@ with col_input_l:
     st.subheader("📷 Visual Input")
 
     input_mode = st.radio(
-        "Input mode",
+        "Visual input mode",
         ["Upload image", "Take photo (webcam)"],
         horizontal=True,
     )
@@ -78,11 +86,34 @@ with col_input_l:
 
 with col_input_r:
     st.subheader("💬 Verbal Input")
-    user_text = st.text_area(
-        "Type what the person said",
-        value="No, I think the project is going really well.",
-        height=120,
+
+    text_mode = st.radio(
+        "Verbal input mode",
+        ["Type text", "Record audio (Whisper)"],
+        horizontal=True,
     )
+
+    if text_mode == "Record audio (Whisper)":
+        audio_bytes = st.audio_input("Click to record (then click stop)")
+        if audio_bytes is not None:
+            with st.spinner("Transcribing with Whisper..."):
+                try:
+                    transcript = transcribe_audio(audio_bytes.getvalue())
+                    if transcript:
+                        st.session_state.transcribed_text = transcript
+                        st.success(f"✅ Transcribed: \"{transcript}\"")
+                    else:
+                        st.warning("Whisper returned empty transcript - try recording again with clearer audio.")
+                except Exception as e:
+                    st.error(f"Transcription failed: {e}")
+
+    user_text = st.text_area(
+        "Text used for sentiment analysis",
+        value=st.session_state.transcribed_text,
+        height=120,
+        help="If using audio mode, the transcription appears here. You can also edit it.",
+    )
+    st.session_state.transcribed_text = user_text
 
 st.divider()
 
@@ -106,7 +137,7 @@ if analyze_clicked:
         st.error("⚠️ Please upload an image or take a photo first.")
         st.stop()
     if not user_text.strip():
-        st.error("⚠️ Please type a sentence first.")
+        st.error("⚠️ Please type or record a sentence first.")
         st.stop()
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
@@ -218,5 +249,6 @@ st.divider()
 st.caption(
     "MoodSyncAI · Data Analytics 3 Final Project · SRH Hamburg · "
     "Models: dima806/facial_emotions_image_detection · "
-    "cardiffnlp/twitter-roberta-base-sentiment-latest · google/flan-t5-base"
+    "cardiffnlp/twitter-roberta-base-sentiment-latest · google/flan-t5-base · "
+    "openai/whisper-tiny"
 )
