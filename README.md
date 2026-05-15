@@ -1,4 +1,4 @@
-﻿# MoodSyncAI
+# MoodSyncAI
 
 **Multi-Modal Sentiment & Emotion Analyser**
 
@@ -10,18 +10,23 @@ Author: Veera Raghava Mallikarjuna Naidu Bhogadi
 
 ## Overview
 
-MoodSyncAI analyses a person''s emotional state by combining **two input modalities**:
+MoodSyncAI analyses a person's emotional state by combining **two input modalities**:
 
 1. **Visual** — a facial image, classified by a pretrained Vision Transformer (ViT)
 2. **Verbal** — a typed sentence, classified by a pretrained Transformer (RoBERTa)
 
 A **fusion layer** compares the two predictions and detects whether the visual and verbal signals are aligned or in conflict. A **generative language model** (flan-t5-base) then produces a plain-language summary explaining what the combined signals likely mean.
 
-The system surfaces emotional incongruences — for example, when a person verbally says *"I''m fine"* but their face shows distress.
+The system surfaces emotional incongruences — for example, when a person verbally says *"I'm fine"* but their face shows distress.
 
 ---
 
 ## Architecture
+
+![MoodSyncAI architecture](screenshots/architecture.png)
+
+Two pretrained models run in parallel: a Vision Transformer (`dima806/facial_emotions_image_detection`) classifies the face image into one of seven emotion classes, while a RoBERTa transformer (`cardiffnlp/twitter-roberta-base-sentiment-latest`) classifies the text into a sentiment polarity. A **rule-based fusion layer** maps each visual emotion onto a sentiment polarity and compares it against the text result, emitting one of three verdicts: `ALIGNED`, `PARTIAL MISMATCH`, or `MISMATCH DETECTED`. A **generative model** (`google/flan-t5-base`) then produces a one-sentence interpretation, wrapped in a Streamlit UI that exposes the per-class probability bars, the fusion status badge, and the plain-language summary.
+
 ---
 
 ## Models used
@@ -37,6 +42,27 @@ All three are downloaded automatically on first run from the Hugging Face Hub. T
 ---
 
 ## File structure
+
+```
+moodsync-ai/
+├── app.py                       # Streamlit UI (entry point)
+├── cnn_emotion.py               # Facial emotion classifier (ViT)
+├── text_sentiment.py            # Text sentiment classifier (RoBERTa)
+├── fusion.py                    # Multimodal fusion layer (rule-based)
+├── summary.py                   # Hybrid generative summary (rules + flan-t5-base)
+├── attention_rollout.py         # ViT attention rollout heatmap (Extended Feature 3)
+├── audio_transcribe.py          # Whisper audio transcription (Extended Feature 2)
+├── README.md                    # This file
+├── Documentation.pdf            # eCampus submission item 1
+├── MoodSyncAI_Presentation.pdf  # eCampus submission item 3
+├── MoodSyncAI_Presentation.pptx # Editable source of the presentation
+├── .gitignore
+└── screenshots/
+    ├── architecture.png         # System architecture diagram
+    ├── streamlit_demo.png       # Streamlit UI in MISMATCH state
+    └── attention_rollout_demo.png # Attention heatmap example
+```
+
 ---
 
 ## Installation
@@ -116,6 +142,8 @@ This hybrid was a deliberate engineering choice. Asking flan-t5-base to produce 
 
 ## Example output
 
+![Streamlit UI showing MISMATCH DETECTED state](screenshots/streamlit_demo.png)
+
 **Input:**
 - Image: face showing strong anger (clenched fist, intense expression)
 - Text: *"No, I think the project is going really well."*
@@ -130,7 +158,7 @@ This hybrid was a deliberate engineering choice. Asking flan-t5-base to produce 
 | Agreement      | 25.2 %             | —          |
 
 **Generative summary:**
-> *The visual analysis detected ''angry'' (52% confidence) while the verbal sentiment was classified as ''positive'' (96% confidence). This is a clear incongruence: the facial cues suggest one emotional state while the verbal content suggests another. A person might say something positive while their face shows anger.*
+> *The visual analysis detected 'angry' (52% confidence) while the verbal sentiment was classified as 'positive' (96% confidence). This is a clear incongruence: the facial cues suggest one emotional state while the verbal content suggests another. A person might say something positive while their face shows anger.*
 
 ---
 
@@ -146,11 +174,10 @@ This hybrid was a deliberate engineering choice. Asking flan-t5-base to produce 
 
 ## Limitations and future work
 
-- **No webcam / real-time video input.** Image upload only. Adding webcam capture (extended feature 1 in the brief) is a clear next step.
-- **No audio modality.** Text input is typed, not transcribed. Adding Whisper for speech-to-text (extended feature 2) would make the third modality possible.
-- **Rule-based fusion.** A learned fusion network (extended feature 5) would adapt better to ambiguous cases but requires labelled training data.
-- **No attention visualisation.** Grad-CAM for the CNN and attention maps for RoBERTa would help users understand which facial regions and which tokens drove a prediction (extended feature 4).
+- **No real-time video timeline.** The webcam captures a still frame rather than a continuous stream. Frame-by-frame emotion tracking over a speaking turn would be the natural next step.
+- **Rule-based fusion.** A learned fusion network (extended feature 5 in the brief) would adapt better to ambiguous cases but requires labelled training data with ground-truth incongruence labels, which is not publicly available.
 - **Generative summary quality is limited by flan-t5-base.** A larger model (e.g. flan-t5-large or an API-based GPT-class model) would produce more nuanced explanations. The hybrid template approach in this implementation guards against catastrophic failures regardless of LLM quality.
+- **No cloud deployment.** The app runs locally because hosting all four models (ViT, RoBERTa, Whisper, flan-t5-base — totalling ~3 GB) requires a paid tier on most free-deployment services.
 
 ---
 
@@ -174,7 +201,6 @@ Each core requirement of the assignment maps to specific lectures from the Data 
 - **Google Research** for the **flan-t5-base** model.
 - **Prof. Dr. Gayan de Silva** for course direction and the assignment brief.
 
-
 ---
 
 ## Extended Features Implemented
@@ -196,6 +222,8 @@ The user can also still type text manually if they prefer. The tiny variant of W
 File: `audio_transcribe.py`
 
 ### 3. ViT attention rollout heatmap
+
+![Attention rollout heatmap example](screenshots/attention_rollout_demo.png)
 
 A visualisation of which facial regions the Vision Transformer attended to when predicting the emotion. Implements the **attention rollout** technique from Abnar & Zuidema (ACL 2020):
 
@@ -219,4 +247,3 @@ File: `attention_rollout.py`
 - **Real-time video timeline** — out of scope for the available time; the existing webcam capture is a still frame rather than a continuous video stream.
 - **Learned fusion network** — would require paired image-text data with ground-truth incongruence labels, which is not publicly available. The current rule-based fusion was the pragmatic alternative.
 - **Hugging Face Spaces / Streamlit Cloud deployment** — the app runs locally because hosting all three models (CNN, RoBERTa, Whisper, flan-t5-base, totalling ~3 GB) requires a paid tier on most free-deployment services.
-
